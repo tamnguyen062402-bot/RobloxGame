@@ -334,8 +334,38 @@ local function ensurePlayerDataLoaded(userId, playerName)
 
 	playerData[userId] = loadedData
 	loadingPlayers[userId] = nil
-
-	return loadedData
+	-- Set points to level after loading
+	local player = Players:GetPlayerByUserId(userId)
+	if player then
+		local PlayerStatsService = nil
+		if script.Parent:FindFirstChild("PlayerStatsService") then
+			PlayerStatsService = require(script.Parent:FindFirstChild("PlayerStatsService"))
+		else
+			PlayerStatsService = require(ReplicatedStorage:WaitForChild("Server"):WaitForChild("PlayerStatsService"))
+		end
+		PlayerStatsService.SetPoints(player, loadedData.level or 1)
+		-- Fire initial save and economy snapshots to client for UI sync
+		pcall(function()
+			print("[SaveManager] Sending initial save + economy snapshot to", player.Name)
+			saveEvent:FireClient(player, loadedData)
+			local econEvent = ReplicatedStorage:FindFirstChild("EconomySnapshotEvent")
+			if not (econEvent and econEvent:IsA("RemoteEvent")) then
+				-- create a RemoteEvent for explicit economy snapshots (server->client)
+				econEvent = Instance.new("RemoteEvent")
+				econEvent.Name = "EconomySnapshotEvent"
+				econEvent.Parent = ReplicatedStorage
+			end
+			local econSnapshot = {
+				coins = math.max(0, math.floor(tonumber(loadedData.coins) or 0)),
+				boosterPacks = loadedData.boosterPacks or {},
+				items = (loadedData.items) or { AutoRoll2x20s = 0 },
+				rollCount = math.max(0, math.floor(tonumber(loadedData.rollCount) or 0)),
+				level = math.max(1, math.floor(tonumber(loadedData.level) or 1)),
+			}
+			econEvent:FireClient(player, econSnapshot)
+		end)
+	end
+	 return loadedData
 end
 
 local function buildOwnedCardCounts(inventoryList, combatList)
@@ -404,6 +434,7 @@ local function executeEconomyDelta(payload)
 
 	local rollCountDelta = math.floor(tonumber(payload.rollCountDelta) or 0)
 	local nextRollCount = math.max(0, math.floor(tonumber(current.rollCount) or 0) + rollCountDelta)
+	local previousLevel = math.max(1, math.floor((tonumber(current.rollCount) or 0) / 100) + 1)
 	local nextLevel = math.max(1, math.floor(nextRollCount / 100) + 1)
 
 	local rawPackDelta = (type(payload.boosterPacksDelta) == "table") and payload.boosterPacksDelta or {}
@@ -456,6 +487,22 @@ local function executeEconomyDelta(payload)
 	current.coins = nextCoins
 	current.rollCount = nextRollCount
 	current.level = nextLevel
+
+	-- Grant skill points on level-up
+	if nextLevel > previousLevel then
+		local player = Players:GetPlayerByUserId(userId)
+		if player then
+			for _ = 1, (nextLevel - previousLevel) do
+				local PlayerStatsService = nil
+				if script.Parent:FindFirstChild("PlayerStatsService") then
+					PlayerStatsService = require(script.Parent:FindFirstChild("PlayerStatsService"))
+				else
+					PlayerStatsService = require(ReplicatedStorage:WaitForChild("Server"):WaitForChild("PlayerStatsService"))
+				end
+				PlayerStatsService.OnLevelUp(player)
+			end
+		end
+	end
 
 	for packId, delta in pairs(packDelta) do
 		local nextCount = math.max(0, math.floor(tonumber(current.boosterPacks[packId]) or 0) + delta)
@@ -623,3 +670,31 @@ game:BindToClose(function()
 		end
 	end
 end)
+
+-- Export SaveManager as a module
+local SaveManager = {}
+SaveManager.playerData = playerData
+SaveManager.persistPlayerData = persistPlayerData
+SaveManager.tryPersistPlayerData = tryPersistPlayerData
+SaveManager.buildDefaultData = buildDefaultData
+SaveManager.getEconomyState = getEconomyState
+SaveManager.executeEconomyDelta = executeEconomyDelta
+local function resetAllPlayers(invoker)
+	for userId, data in pairs(playerData) do
+		data.rollCount = 0
+		data.level = 1
+		dirtyPlayers[userId] = true
+		pcall(function()
+			tryPersistPlayerData(userId, userId)
+		end)
+		local player = Players:GetPlayerByUserId(tonumber(userId))
+		if player then
+			pcall(function()
+				saveEvent:FireClient(player, { rollCount = 0, level = 1 })
+			end)
+		end
+	end
+	print("[SaveManager] ResetAllPlayers called by", (invoker and invoker.Name) or "server")
+end
+SaveManager.ResetAllPlayers = resetAllPlayers
+return SaveManager

@@ -7,8 +7,11 @@ local ContentProvider = game:GetService("ContentProvider")
 local Workspace = game:GetService("Workspace")
 
 local BattleProtocol = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BattleProtocol"))
-local CardDatabase = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CardDatabase"))
 local cardArtFolder = ReplicatedStorage:WaitForChild("CardArt")
+local CardDatabase = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CardDatabase"))
+-- Move the boss card (Perfect Cell) up when hit
+-- (Removed boss card hit movement logic)
+-- Removed unused cardArtFolder assignment
 
 local function waitForRemote(folder, remoteName)
 	local remote = folder:WaitForChild(remoteName)
@@ -331,7 +334,7 @@ local function resolveArtScaleType(data, imageObj)
 end
 local HIT_SOUND_ASSET = "rbxassetid://9118828568"
 local PLAYER_ATTACK_SOUND_ASSET = "rbxassetid://12222242"
-local BOSS_HIT_SOUND_ASSET = "rbxassetid://9118823106"
+local BOSS_HIT_SOUND_ASSET = "rbxassetid://91078784560732" -- Public explosion sound
 local ABILITY_SPEED_SOUND_ASSET = "rbxassetid://9113420775"
 local ABILITY_DAMAGE_SOUND_ASSET = "rbxassetid://9118828568"
 local ABILITY_HEAL_SOUND_ASSET = "rbxassetid://9048375035"
@@ -447,7 +450,7 @@ local function removeCardViewFromMappings(cardView)
 	end
 end
 
-local function createBattleGui()
+local function createBattleGui(payload)
 	local playerGui = player:WaitForChild("PlayerGui")
 	local existing = playerGui:FindFirstChild("NpcBattleGui")
 	if existing and existing:IsA("ScreenGui") then
@@ -464,9 +467,25 @@ local function createBattleGui()
 	gui.DisplayOrder = 420
 	gui.Parent = playerGui
 
+	-- Create transparent animation layer
+	local animLayer = Instance.new("ScreenGui")
+	animLayer.Name = "BattleAnimLayer"
+	animLayer.ResetOnSpawn = false
+	animLayer.DisplayOrder = 421 -- Above NpcBattleGui
+	animLayer.Parent = playerGui
+	animLayer.IgnoreGuiInset = true
+	-- Transparent full-screen frame for effects
+	local animFrame = Instance.new("Frame")
+	animFrame.Name = "AnimRoot"
+	animFrame.Size = UDim2.fromScale(1, 1)
+	animFrame.BackgroundTransparency = 1
+	animFrame.BorderSizePixel = 0
+    animFrame.ClipsDescendants = true
+	animFrame.Parent = animLayer
+
 	local root = Instance.new("Frame")
 	root.Name = "Root"
-	root.Size = UDim2.fromScale(1, 1)
+	root.Size = UDim2.fromScale(1, 1) -- Make the battle UI row even taller for more room
 	root.BackgroundColor3 = Color3.fromRGB(8, 10, 15)
 	root.BackgroundTransparency = 0.28
 	root.BorderSizePixel = 0
@@ -475,11 +494,13 @@ local function createBattleGui()
 	local bossCard = Instance.new("Frame")
 	bossCard.Name = "BossCard"
 	bossCard.AnchorPoint = Vector2.new(0.5, 0)
-	bossCard.Size = UDim2.fromOffset(260, 320)
-	bossCard.Position = UDim2.new(0.5, 0, 0, 16)
+	bossCard.Size = UDim2.fromOffset(200, 240) -- Make the NPC card frame smaller
+	bossCard.Position = UDim2.new(0.5, 0, 0, 40) -- Move the NPC card further down
 	bossCard.BackgroundColor3 = Color3.fromRGB(28, 20, 20)
 	bossCard.BorderSizePixel = 0
+	bossCard.ClipsDescendants = false
 	bossCard.Parent = root
+	bossCard:SetAttribute("IsNpcCard", true)
 
 	local bossCorner = Instance.new("UICorner")
 	bossCorner.CornerRadius = UDim.new(0, 12)
@@ -491,6 +512,18 @@ local function createBattleGui()
 	bossStroke.Transparency = 0.1
 	bossStroke.Parent = bossCard
 
+	local bossArt = Instance.new("ImageLabel")
+	bossArt.Name = "BossArt"
+	bossArt.Size = UDim2.fromScale(1, 1)
+	bossArt.Position = UDim2.new(0, 0, 0, 0)
+	bossArt.BackgroundTransparency = 1
+	bossArt.BorderSizePixel = 0
+	bossArt.ScaleType = Enum.ScaleType.Stretch
+	bossArt.ClipsDescendants = true -- Only clip card art, not the card frame
+	bossArt.Image = "" -- will be set below
+	bossArt.Parent = bossCard
+
+	-- Boss name at top
 	local bossTitle = Instance.new("TextLabel")
 	bossTitle.Name = "BossTitle"
 	bossTitle.Size = UDim2.new(1, -20, 0, 52)
@@ -501,18 +534,32 @@ local function createBattleGui()
 	bossTitle.Font = Enum.Font.Fantasy
 	bossTitle.TextSize = 30
 	bossTitle.TextWrapped = true
+	bossTitle.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	bossTitle.TextStrokeTransparency = 0.2
 	bossTitle.Parent = bossCard
+
+	-- Set bossArt.Image to ArtAssetId from database using the correct boss cardId
+	local cardDatabaseModule = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CardDatabase"))
+	local bossCardId = payload and payload.bossCardId or "PerfectCell"
+	local bossData = cardDatabaseModule.GetCardData and cardDatabaseModule.GetCardData(bossCardId)
+	if bossData and type(bossData.ArtAssetId) == "string" and bossData.ArtAssetId ~= "" then
+		bossArt.Image = bossData.ArtAssetId
+	end
+    -- Ensure CardId attribute is set for animation logic
+    bossCard:SetAttribute("CardId", bossCardId)
 
 	local bossHp = Instance.new("TextLabel")
 	bossHp.Name = "BossHp"
-	bossHp.Size = UDim2.new(1, -20, 0, 44)
-	bossHp.Position = UDim2.fromOffset(10, 72)
+	bossHp.Size = UDim2.new(1, -20, 0, 36)
+	bossHp.Position = UDim2.fromOffset(10, 68)
 	bossHp.BackgroundTransparency = 1
 	bossHp.Text = "HP: 0 / 0"
 	bossHp.TextColor3 = Color3.fromRGB(255, 130, 130)
 	bossHp.Font = Enum.Font.SourceSansBold
-	bossHp.TextSize = 30
+	bossHp.TextSize = 24
 	bossHp.TextXAlignment = Enum.TextXAlignment.Center
+	bossHp.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	bossHp.TextStrokeTransparency = 0.25
 	bossHp.Parent = bossCard
 
 	local bossHint = Instance.new("TextLabel")
@@ -525,6 +572,8 @@ local function createBattleGui()
 	bossHint.Font = Enum.Font.SourceSans
 	bossHint.TextSize = 20
 	bossHint.TextXAlignment = Enum.TextXAlignment.Center
+	bossHint.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	bossHint.TextStrokeTransparency = 0.3
 	bossHint.Parent = bossCard
 
 	local deckRow = Instance.new("Frame")
@@ -632,13 +681,19 @@ local function createBattleGui()
 end
 
 local function createDeckCardView(cardId)
-	local data = CardDatabase.GetCardData(cardId)
-	local frame = Instance.new("Frame")
-	frame.Name = "DeckCard_" .. tostring(cardId)
-	frame.Size = UDim2.fromOffset(168, 234)
-	frame.BackgroundColor3 = Color3.fromRGB(24, 28, 42)
-	frame.BorderSizePixel = 0
-	frame:SetAttribute("CardId", cardId)
+	   local data = CardDatabase.GetCardData(cardId)
+	   local frame = Instance.new("Frame")
+	   frame.Name = "DeckCard_" .. tostring(cardId)
+	   frame.Size = UDim2.fromOffset(168, 234)
+	   frame.BackgroundColor3 = Color3.fromRGB(24, 28, 42)
+	   frame.BorderSizePixel = 0
+	   frame:SetAttribute("CardId", cardId)
+	   -- Mark NPC cards for shake effect
+	   if data and data.IsNpcCard == true then
+		   frame:SetAttribute("IsNpcCard", true)
+	   else
+		   frame:SetAttribute("IsNpcCard", false)
+	   end
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 10)
@@ -653,6 +708,7 @@ local function createDeckCardView(cardId)
 	art.BorderSizePixel = 0
 	art.ScaleType = Enum.ScaleType.Fit
 	art.Parent = frame
+	-- (Removed blood VFX overlay for TestBattleCard)
 
 	local artCorner = Instance.new("UICorner")
 	artCorner.CornerRadius = UDim.new(0, 8)
@@ -664,7 +720,6 @@ local function createDeckCardView(cardId)
 	artStroke.Transparency = 0.35
 	artStroke.Parent = art
 
-	local imageObj = findCardArtDecal(cardId)
 	local videoAssetId = data and data.VideoAssetId
 	if type(videoAssetId) == "string" and videoAssetId ~= "" and videoAssetId ~= "rbxassetid://0" then
 		local artVideo = Instance.new("VideoFrame")
@@ -678,12 +733,15 @@ local function createDeckCardView(cardId)
 		artVideo.Parent = art
 		ensureBattleVideoFramePlayback(artVideo, videoAssetId)
 		art.Image = ""
-	elseif imageObj then
-		art.Image = imageObj.Texture
-	elseif data and type(data.ArtAssetId) == "string" and data.ArtAssetId ~= "" and data.ArtAssetId ~= "rbxassetid://0" then
-		art.Image = data.ArtAssetId
+	else
+		local decal = findCardArtDecal(cardId)
+		if decal and decal.Texture then
+			art.Image = decal.Texture
+		elseif data and type(data.ArtAssetId) == "string" and data.ArtAssetId ~= "" and data.ArtAssetId ~= "rbxassetid://0" then
+			art.Image = data.ArtAssetId
+		end
 	end
-	art.ScaleType = resolveArtScaleType(data, imageObj)
+	art.ScaleType = resolveArtScaleType(data, nil)
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = 1
@@ -989,13 +1047,9 @@ local function animateSingleDeckAttack(attackerSlotIndex, attackerCardId)
 	end
 
 	local function playHitEffects()
-		local soundTemplate = uiState.gui and uiState.gui:FindFirstChild("BattleHitSound")
-		if soundTemplate and soundTemplate:IsA("Sound") then
-			local sound = soundTemplate:Clone()
-			sound.Parent = uiState.gui
-			sound:Play()
-			Debris:AddItem(sound, 2)
-		end
+		-- ...existing code...
+			-- Trigger flame animation on card hit
+			emitAbilityWorldParticleBurst("Flame", Color3.fromRGB(255, 120, 62))
 
 		for i = 1, 8 do
 			local spark = Instance.new("Frame")
@@ -1036,7 +1090,7 @@ local function animateSingleDeckAttack(attackerSlotIndex, attackerCardId)
 		flash.Size = UDim2.fromScale(1, 1)
 		flash.Position = UDim2.fromOffset(0, 0)
 		flash.BackgroundColor3 = Color3.fromRGB(255, 160, 160)
-		flash.BackgroundTransparency = 0.85
+		flash.BackgroundTransparency = 0.5
 		flash.BorderSizePixel = 0
 		flash.ZIndex = 90
 		flash.Parent = bossCard
@@ -1064,45 +1118,120 @@ local function animateSingleDeckAttack(attackerSlotIndex, attackerCardId)
 			Size = UDim2.fromOffset(math.floor(cardView.AbsoluteSize.X * 0.92), math.floor(cardView.AbsoluteSize.Y * 0.92)),
 		}
 	)
-	local attackSoundTemplate = uiState.gui and uiState.gui:FindFirstChild("PlayerAttackSound")
-	if attackSoundTemplate and attackSoundTemplate:IsA("Sound") then
-		local attackSound = attackSoundTemplate:Clone()
-		attackSound.Parent = uiState.gui
-		attackSound:Play()
-		Debris:AddItem(attackSound, 2)
-	end
+	   -- Play PlayerAttackSound for all combat deck card attacks except NPC cards
+	   if not cardView:GetAttribute("IsNpcCard") then
+		   local attackSoundTemplate = uiState.gui and uiState.gui:FindFirstChild("PlayerAttackSound")
+		   if attackSoundTemplate and attackSoundTemplate:IsA("Sound") then
+			   local attackSound = attackSoundTemplate:Clone()
+			   attackSound.Parent = uiState.gui
+			   attackSound:Play()
+			   Debris:AddItem(attackSound, 2)
+		   end
+	   end
 	launch:Play()
 	launch.Completed:Connect(function()
-		if not (cardView and cardView.Parent) then
-			return
-		end
+		   if not (cardView and cardView.Parent) then
+			   return
+		   end
 
-		playHitEffects()
+		   playHitEffects()
 
-		local retreat = TweenService:Create(
-			cardView,
-			TweenInfo.new(0.24, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-			{
-				Position = UDim2.fromOffset(startLocal.X, startLocal.Y),
-				Size = originalSize,
-			}
-		)
-		retreat:Play()
-		retreat.Completed:Connect(function()
-			if cardView and cardView.Parent then
-				local pendingDeath = cardView:GetAttribute("PendingDeath") == true
-				cardView.AnchorPoint = Vector2.new(0, 0)
-				cardView.Size = originalSize
-				cardView.Position = UDim2.fromOffset(0, 0)
-				cardView.LayoutOrder = originalLayoutOrder
-				cardView.Parent = deckRow
-				cardView:SetAttribute("IsAnimatingAttack", false)
-				if pendingDeath then
-					cardView:SetAttribute("PendingDeath", false)
-					playCardDeathAnimation(cardView)
-				end
-			end
-		end)
+		   -- Shake effect for NPC card hit by combat deck card
+		   local function doShakeEffectIfNpcCard(onComplete)
+			   if cardView:GetAttribute("IsNpcCard") then
+				   print("[DEBUG] NPC card hit, moving up:", cardView.Name)
+				   cardView.AnchorPoint = Vector2.new(0.5, 0.5)
+				   cardView.ZIndex = 100
+				   local upAmount = -40
+				   local upTween = TweenService:Create(
+					   cardView,
+					   TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+					   {Position = UDim2.fromOffset(startLocal.X, startLocal.Y + upAmount)}
+				   )
+				   upTween.Completed:Connect(function()
+					   local downTween = TweenService:Create(
+						   cardView,
+						   TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+						   {Position = UDim2.fromOffset(startLocal.X, startLocal.Y)}
+					   )
+					   downTween.Completed:Connect(function()
+						   cardView.ZIndex = 50
+						   if onComplete then
+							   onComplete()
+						   end
+					   end)
+					   downTween:Play()
+				   end)
+				   upTween:Play()
+			   else
+				   print("[DEBUG] Not an NPC card, skipping move for:", cardView.Name)
+				   if onComplete then
+					   onComplete()
+				   end
+			   end
+		   end
+
+		   doShakeEffectIfNpcCard(function()
+			   -- (Removed boss card hit movement call)
+			   local retreat = TweenService:Create(
+				   cardView,
+				   TweenInfo.new(0.24, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+				   {
+					   Position = UDim2.fromOffset(startLocal.X, startLocal.Y),
+					   Size = originalSize,
+				   }
+			   )
+			   retreat:Play()
+			   retreat.Completed:Connect(function()
+				   if cardView and cardView.Parent then
+					   local pendingDeath = cardView:GetAttribute("PendingDeath") == true
+					   cardView.AnchorPoint = Vector2.new(0, 0)
+					   cardView.Size = originalSize
+					   cardView.Position = UDim2.fromOffset(0, 0)
+					   cardView.LayoutOrder = originalLayoutOrder
+					   cardView.Parent = deckRow
+					   cardView:SetAttribute("IsAnimatingAttack", false)
+					   if pendingDeath then
+						   cardView:SetAttribute("PendingDeath", false)
+						   playCardDeathAnimation(cardView)
+					   end
+				   end
+			   end)
+		   end)
+
+		   local retreat = TweenService:Create(
+			   cardView,
+			   TweenInfo.new(0.24, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+			   {
+				   Position = UDim2.fromOffset(startLocal.X, startLocal.Y),
+				   Size = originalSize,
+			   }
+		   )
+		   retreat:Play()
+		   retreat.Completed:Connect(function()
+			   if cardView and cardView.Parent then
+				   -- TEST: Try to move the cardView in place after attack
+				   local testTween = TweenService:Create(
+					   cardView,
+					   TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+					   {Position = UDim2.fromOffset(startLocal.X + 100, startLocal.Y)}
+				   )
+				   testTween:Play()
+				   testTween.Completed:Connect(function()
+					   local pendingDeath = cardView:GetAttribute("PendingDeath") == true
+					   cardView.AnchorPoint = Vector2.new(0, 0)
+					   cardView.Size = originalSize
+					   cardView.Position = UDim2.fromOffset(0, 0)
+					   cardView.LayoutOrder = originalLayoutOrder
+					   cardView.Parent = deckRow
+					   cardView:SetAttribute("IsAnimatingAttack", false)
+					   if pendingDeath then
+						   cardView:SetAttribute("PendingDeath", false)
+						   playCardDeathAnimation(cardView)
+					   end
+				   end)
+			   end
+		   end)
 	end)
 end
 
@@ -1116,58 +1245,58 @@ local function playBossHitEffects(targetCard)
 	local rootAbs = root.AbsolutePosition
 	local localCenter = Vector2.new(centerAbs.X - rootAbs.X, centerAbs.Y - rootAbs.Y)
 
-	for i = 1, 12 do
+	for i = 1, 24 do -- double the spikes
 		local spike = Instance.new("Frame")
 		spike.Name = "BossHitSpike"
 		spike.AnchorPoint = Vector2.new(0.5, 0.5)
 		spike.BorderSizePixel = 0
-		spike.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(255, 70, 70) or Color3.fromRGB(20, 20, 24)
-		spike.BackgroundTransparency = 0.08
-		spike.Size = UDim2.fromOffset(math.random(4, 8), math.random(18, 30))
-		spike.Position = UDim2.fromOffset(localCenter.X + math.random(-6, 6), localCenter.Y + math.random(-6, 6))
-		spike.Rotation = math.random(0, 180)
-		spike.ZIndex = 96
+		spike.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(255, 40, 40) or Color3.fromRGB(94, 0, 0)
+		spike.BackgroundTransparency = 0
+		spike.Size = UDim2.fromOffset(math.random(8, 16), math.random(32, 60))
+		spike.Position = UDim2.fromOffset(localCenter.X + math.random(-10, 10), localCenter.Y + math.random(-10, 10))
+		spike.Rotation = math.random(0, 360)
+		spike.ZIndex = 121
 		spike.Parent = root
 
 		local angle = math.rad(math.random(0, 359))
-		local radius = math.random(46, 88)
+		local radius = math.random(80, 140)
 		local ex = localCenter.X + (math.cos(angle) * radius)
 		local ey = localCenter.Y + (math.sin(angle) * radius)
 
 		TweenService:Create(
 			spike,
-			TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 			{
 				Position = UDim2.fromOffset(ex, ey),
-				Size = UDim2.fromOffset(2, 6),
+				Size = UDim2.fromOffset(4, 18),
 				BackgroundTransparency = 1,
 			}
 		):Play()
-		Debris:AddItem(spike, 0.3)
+		Debris:AddItem(spike, 0.85)
 	end
 
 	local hitFlash = Instance.new("Frame")
 	hitFlash.Name = "CardHitFlash"
-	hitFlash.Size = UDim2.fromScale(1, 1)
-	hitFlash.Position = UDim2.fromOffset(0, 0)
-	hitFlash.BackgroundColor3 = Color3.fromRGB(255, 72, 72)
-	hitFlash.BackgroundTransparency = 0.62
+	hitFlash.Size = UDim2.fromScale(1.2, 1.2) -- larger flash
+	hitFlash.Position = UDim2.fromOffset(-0.1 * targetCard.AbsoluteSize.X, -0.1 * targetCard.AbsoluteSize.Y)
+	hitFlash.BackgroundColor3 = Color3.fromRGB(255, 30, 30) -- more intense red
+	hitFlash.BackgroundTransparency = 0.18
 	hitFlash.BorderSizePixel = 0
-	hitFlash.ZIndex = 90
+	hitFlash.ZIndex = 120
 	hitFlash.Parent = targetCard
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
+	corner.CornerRadius = UDim.new(0, 16)
 	corner.Parent = hitFlash
 
 	TweenService:Create(
 		hitFlash,
-		TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{BackgroundTransparency = 1}
+		TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Position = UDim2.fromOffset(0, 0)}
 	):Play()
-	Debris:AddItem(hitFlash, 0.22)
+	Debris:AddItem(hitFlash, 1.1)
 
-	emitWorldParticleBurst(Color3.fromRGB(255, 74, 74), 28, 10)
+	emitWorldParticleBurst(Color3.fromRGB(255, 30, 30), 48, 6) -- more, closer particles
 end
 
 local function playBossAttackSound()
@@ -1193,6 +1322,18 @@ local function animateBossAttack(targetSlotIndex, targetCardId)
 	end
 	bossCard:SetAttribute("IsAnimatingAttack", true)
 
+	-- Play sprite animation on bossArt for Perfect Cell (non-blocking)
+	local bossArt = bossCard:FindFirstChild("BossArt")
+	print("[DEBUG] animateBossAttack called for boss card.")
+	if bossArt then
+		print("[DEBUG] BossArt found.")
+	else
+		print("[DEBUG] BossArt not found.")
+	end
+	if uiState.bossNameLabel then
+		print("[DEBUG] Boss name label text:", uiState.bossNameLabel.Text)
+	end
+
 	local targetCard = nil
 	if type(targetSlotIndex) == "number" then
 		targetCard = uiState.deckCardBySlot[targetSlotIndex]
@@ -1214,33 +1355,85 @@ local function animateBossAttack(targetSlotIndex, targetCardId)
 		targetPos = UDim2.new(0.5, 0, 0, 84)
 	end
 
+	print("[DEBUG] BossCard original position:", tostring(originalPos))
+	print("[DEBUG] BossCard target position:", tostring(targetPos))
 	local dash = TweenService:Create(
 		bossCard,
-		TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), -- slowed by half
 		{Position = targetPos}
 	)
 	playBossAttackSound()
 	dash:Play()
 	dash.Completed:Connect(function()
+		print("[DEBUG] BossCard reached target position:", tostring(bossCard.Position))
+		local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+		local animLayer = playerGui and playerGui:FindFirstChild("BattleAnimLayer")
+		local animRoot = animLayer and animLayer:FindFirstChild("AnimRoot")
+		if animRoot then
+			local VFXController = require(script.Parent.vfx.VFXController)
+			print("[DEBUG] bossCardFrame CardId attribute:", uiState.bossCardFrame and uiState.bossCardFrame:GetAttribute("CardId"))
+
+			local bossAnimations = {
+				Aokoji = function()
+					print("[DEBUG] Triggering ice animation for Aokoji")
+					VFXController.playMultiSpriteSequenceOnce(animRoot, {
+						{imageId = "rbxassetid://120564438202500", gridCols = 5, gridRows = 7, totalFrames = 35, frameSize = 128}
+					}, 1/12)
+					local sound = Instance.new("Sound")
+					sound.SoundId = "rbxassetid://75443362172608"
+					sound.Volume = 0.7
+					sound.Parent = animRoot
+					sound:Play()
+					sound.Ended:Connect(function()
+						sound:Destroy()
+					end)
+				end,
+				PerfectCell = function()
+					if targetCard and targetCard.Parent then
+						print("[DEBUG] Triggering flame animation for PerfectCell on hit card")
+						local VFXTemplates = ReplicatedStorage:FindFirstChild("VFXTemplates")
+						local flameTemplate = VFXTemplates and VFXTemplates:FindFirstChild("FlameAnimation")
+						local flameImageId = (flameTemplate and flameTemplate.Image ~= "") and flameTemplate.Image or "rbxassetid://110838461690103"
+						VFXController.playMultiSpriteSequenceOnce(targetCard, {
+							{imageId = flameImageId, gridCols = 8, gridRows = 8, totalFrames = 64, frameSize = 128}
+						}, 1/50)
+					end
+				end
+			}
+
+			local bossCardId = uiState.bossCardFrame and uiState.bossCardFrame:GetAttribute("CardId")
+			if bossCardId and bossAnimations[bossCardId] then
+				bossAnimations[bossCardId]()
+			end
+		end
 		if targetCard and targetCard.Parent then
 			playBossHitEffects(targetCard)
 		end
 
 		local retreat = TweenService:Create(
 			bossCard,
-			TweenInfo.new(0.24, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+			TweenInfo.new(0.48, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), -- slowed by half
 			{Position = originalPos}
 		)
 		retreat:Play()
 		retreat.Completed:Connect(function()
+			print("[DEBUG] BossCard retreated to original position:", tostring(bossCard.Position))
 			bossCard:SetAttribute("IsAnimatingAttack", false)
+			print("[DEBUG] IsAnimatingAttack reset to false.")
+		end)
+		-- Safety: forcibly reset IsAnimatingAttack after 1s in case tween fails
+		task.delay(1, function()
+			if bossCard:GetAttribute("IsAnimatingAttack") then
+				bossCard:SetAttribute("IsAnimatingAttack", false)
+				print("[DEBUG] IsAnimatingAttack forcibly reset after delay.")
+			end
 		end)
 	end)
 end
 
 local function getAbilityEffectStyle(effectType)
 	if effectType == "HealLowestAlly" then
-		return Color3.fromRGB(86, 214, 122), "HEAL"
+		return Color3.fromRGB(86, 214, 122), "RECOVERY+"
 	end
 	if effectType == "TeamAttackSpeedBoost" then
 		return Color3.fromRGB(90, 184, 255), "ATK SPD+"
@@ -1625,6 +1818,15 @@ local function playAbilityEvents(payload)
 			if caster then
 				playAbilityPulse(caster, color, abilityEvent.effectType)
 				showAbilityPopup(caster, color, text)
+				-- Blood animation sequence for TestBattleCard
+				if abilityEvent.effectType == "Fireball" and caster:GetAttribute("CardId") == "TestBattleCard" then
+					local VFXController = require(script.Parent.vfx.VFXController)
+					VFXController.playMultiSpriteSequence(caster, {
+						{imageId = "rbxassetid://77570709327719", gridCols = 8, gridRows = 1, totalFrames = 8, frameSize = 128},
+						{imageId = "rbxassetid://94246830328231", gridCols = 5, gridRows = 1, totalFrames = 5, frameSize = 128},
+						{imageId = "rbxassetid://117080686747829", gridCols = 6, gridRows = 1, totalFrames = 6, frameSize = 128}
+					})
+				end
 			end
 			playBuffScreenPulse(color)
 
@@ -1667,7 +1869,18 @@ local function setBossHint(payload)
 end
 
 local function showBattleUi(payload)
-	local gui = createBattleGui()
+	local gui = createBattleGui(payload)
+	-- Always update CardId attribute for boss card frame
+	if uiState.bossCardFrame and payload and payload.bossCardId then
+		uiState.bossCardFrame:SetAttribute("CardId", payload.bossCardId)
+        -- Always update bossArt.Image for correct boss card
+        local cardDatabaseModule = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CardDatabase"))
+        local bossArt = uiState.bossCardFrame:FindFirstChild("BossArt")
+        local bossData = cardDatabaseModule.GetCardData and cardDatabaseModule.GetCardData(payload.bossCardId)
+        if bossArt and bossData and type(bossData.ArtAssetId) == "string" and bossData.ArtAssetId ~= "" then
+            bossArt.Image = bossData.ArtAssetId
+        end
+	end
 	gui.Enabled = true
 	uiState.sessionId = payload.sessionId
 	setBossHeader(payload)

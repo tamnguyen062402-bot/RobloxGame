@@ -12,11 +12,11 @@ EconomyCatalog.Items = {
 
 EconomyCatalog.DirectCards = {
 	BeliodusX = {
-		Price = 2000,
+		Price = 1,
 		GrantAmount = 1,
 	},
 	AstraEclipse = {
-		Price = 10000,
+		Price = 1000,
 		GrantAmount = 1,
 	},
 }

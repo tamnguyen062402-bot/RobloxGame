@@ -1,6 +1,14 @@
 local CardAbilityConfig = {}
 
 CardAbilityConfig.Abilities = {
+        Fireball = {
+            EffectType = "Fireball",
+            Magnitude = 1,
+            DurationSeconds = 0,
+            DefaultCooldownSeconds = 8,
+            Targeting = "SingleEnemy",
+            Description = "Shoots a fireball at the enemy card every 8 seconds.",
+        },
     AttackSpeedBoost = {
         EffectType = "TeamAttackSpeedBoost",
         Magnitude = 0.35,

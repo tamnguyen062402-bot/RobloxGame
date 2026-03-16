@@ -44,14 +44,15 @@ function BoosterPacksTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	boosterPacksFrame.BackgroundColor3 = inventoryFrame.BackgroundColor3
 	boosterPacksFrame.BorderSizePixel = 0
 	boosterPacksFrame.ScrollBarThickness = 8
-	boosterPacksFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	boosterPacksFrame.CanvasSize = UDim2.fromOffset(0, 0)
 	boosterPacksFrame.Visible = false
-	boosterPacksFrame.Parent = mainUI
+	boosterPacksFrame.Parent = (inventoryFrame and inventoryFrame.Parent) or mainUI
+	boosterPacksFrame.ZIndex = 10
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.Size = UDim2.new(1, -20, 0, 40)
-	title.Position = UDim2.new(0, 10, 0, 10)
+	title.Position = UDim2.fromOffset(10, 10)
 	title.BackgroundTransparency = 1
 	title.Text = "Your Booster Packs"
 	title.TextColor3 = Color3.new(1, 1, 1)
@@ -63,7 +64,7 @@ function BoosterPacksTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	local list = Instance.new("Frame")
 	list.Name = "OwnedPackList"
 	list.Size = UDim2.new(1, -20, 1, -60)
-	list.Position = UDim2.new(0, 10, 0, 50)
+	list.Position = UDim2.fromOffset(10, 50)
 	list.BackgroundTransparency = 1
 	list.Parent = boosterPacksFrame
 
@@ -86,8 +87,8 @@ function BoosterPacksTab.GetOrCreateFrame(mainUI, inventoryFrame)
 
 		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(0, 56, 0, 56)
-		icon.Position = UDim2.new(0, 4, 0, 4)
+		icon.Size = UDim2.fromOffset(56, 56)
+		icon.Position = UDim2.fromOffset(4, 4)
 		icon.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
 		icon.BorderSizePixel = 0
 		icon.Image = pack.Image
@@ -96,7 +97,7 @@ function BoosterPacksTab.GetOrCreateFrame(mainUI, inventoryFrame)
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "NameLabel"
 		nameLabel.Size = UDim2.new(1, -190, 0, 28)
-		nameLabel.Position = UDim2.new(0, 68, 0, 6)
+		nameLabel.Position = UDim2.fromOffset(68, 6)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 		nameLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -108,7 +109,7 @@ function BoosterPacksTab.GetOrCreateFrame(mainUI, inventoryFrame)
 		local ownedLabel = Instance.new("TextLabel")
 		ownedLabel.Name = "OwnedLabel"
 		ownedLabel.Size = UDim2.new(1, -190, 0, 24)
-		ownedLabel.Position = UDim2.new(0, 68, 0, 34)
+		ownedLabel.Position = UDim2.fromOffset(68, 34)
 		ownedLabel.BackgroundTransparency = 1
 		ownedLabel.TextXAlignment = Enum.TextXAlignment.Left
 		ownedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -121,7 +122,7 @@ function BoosterPacksTab.GetOrCreateFrame(mainUI, inventoryFrame)
 		local cardsPerOpen = math.max(1, math.floor(pack.CardsPerOpen or BoosterBalanceConfig.DefaultCardsPerOpen))
 		local openButton = Instance.new("TextButton")
 		openButton.Name = "OpenButton"
-		openButton.Size = UDim2.new(0, 110, 0, 36)
+		openButton.Size = UDim2.fromOffset(110, 36)
 		openButton.Position = UDim2.new(1, -116, 0.5, -18)
 		openButton.BackgroundColor3 = Color3.fromRGB(60, 100, 170)
 		openButton.BorderSizePixel = 0

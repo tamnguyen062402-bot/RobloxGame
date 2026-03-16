@@ -82,11 +82,17 @@ end
 local function pickCardForRarity(rarity)
 	local function isRollEligible(cardId)
 		local data = CardDatabase.GetCardData(cardId)
-		return not (data and (data.Rarity == "God" or data.Rarity == "Transcendent"))
+		return not (
+			data and (
+				data.Rarity == "God" or
+				data.Rarity == "Transcendent" or
+				data.Category == "NPC"
+			)
+		)
 	end
 
 	local pool = {}
-	for _, cardRef in ipairs(CardDatabase.GetAllCardIds()) do
+	for _, cardRef in ipairs(CardDatabase.GetAllCardIdsSorted()) do
 		local resolvedId = CardDatabase.ResolveCardId(cardRef) or cardRef
 		local data = CardDatabase.GetCardData(resolvedId)
 		if data and data.Rarity == rarity and isRollEligible(resolvedId) then
@@ -95,7 +101,7 @@ local function pickCardForRarity(rarity)
 	end
 
 	if #pool == 0 then
-		for _, cardRef in ipairs(CardDatabase.GetAllCardIds()) do
+		for _, cardRef in ipairs(CardDatabase.GetAllCardIdsSorted()) do
 			local resolvedId = CardDatabase.ResolveCardId(cardRef) or cardRef
 			if isRollEligible(resolvedId) then
 				table.insert(pool, resolvedId)

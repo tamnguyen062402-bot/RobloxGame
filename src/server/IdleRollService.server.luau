@@ -95,9 +95,20 @@ end
 
 local function pickIdleRollCardId()
 	local rarity = pickIdleRollRarity()
-	local pool = CardDatabase.GetCardsByRarity(rarity)
+	local pool = {}
+	for _, cardId in ipairs(CardDatabase.GetCardsByRarity(rarity)) do
+		local data = CardDatabase.GetCardData(cardId)
+		if data and data.Category ~= "NPC" then
+			table.insert(pool, cardId)
+		end
+	end
 	if #pool == 0 then
-		pool = CardDatabase.GetAllCardIds()
+		for _, cardId in ipairs(CardDatabase.GetAllCardIdsSorted()) do
+			local data = CardDatabase.GetCardData(cardId)
+			if data and data.Category ~= "NPC" then
+				table.insert(pool, cardId)
+			end
+		end
 	end
 	if #pool == 0 then
 		return nil

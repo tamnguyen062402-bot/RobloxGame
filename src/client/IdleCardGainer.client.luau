@@ -267,6 +267,9 @@ trackerGui.Name = "RollTrackerGui"
 trackerGui.DisplayOrder = 50  -- Below notifications
 trackerGui.Parent = playerGui
 
+-- Ensure trackerGui DisplayOrder is high enough for auto-roll button
+trackerGui.DisplayOrder = math.max(trackerGui.DisplayOrder or 0, 50)
+
 local autoRollButton = Instance.new("TextButton")
 autoRollButton.Name = "AutoRollButton"
 autoRollButton.Size = UDim2.fromOffset(120, 50)
@@ -411,7 +414,9 @@ end
 
 -- Load persisted roll and level values when the server sends player data.
 saveEvent.OnClientEvent:Connect(function(data)
-	if type(data) ~= "table" then return end
+	if type(data) ~= "table" then
+		return
+	end
 	if type(data.rollCount) == "number" then
 		rollCount = math.max(0, math.floor(data.rollCount))
 	end

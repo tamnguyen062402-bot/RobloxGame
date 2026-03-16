@@ -1,4 +1,31 @@
+
+-- Returns the cumulative number of rolls needed to reach the current level using capped linear/exponential formula
+local function getCumulativeRollsToLevel(level)
+	local total = 0
+	local base = 10
+	local growth = 1.15 -- mild exponential
+	local cap = 100 -- max rolls required per level
+	for i = 1, level do
+		local req = math.floor(base * (growth ^ (i-1)))
+		if req > cap then
+			req = cap
+		end
+		total = total + req
+	end
+	return total
+end
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ResetAllRollsEvent = ReplicatedStorage:FindFirstChild("ResetAllRollsEvent")
+if not ResetAllRollsEvent then
+	ResetAllRollsEvent = Instance.new("RemoteEvent")
+	ResetAllRollsEvent.Name = "ResetAllRollsEvent"
+	ResetAllRollsEvent.Parent = ReplicatedStorage
+end
+
+-- selene: allow(unused_variable)
+function ResetAllRolls()
+	ResetAllRollsEvent:FireServer()
+end
 local ContentProvider = game:GetService("ContentProvider")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -63,8 +90,9 @@ local function getOrCreateDeckFrame(frameName, fallbackPosition)
 	return frame
 end
 
-local inventoryFrame = getOrCreateDeckFrame("InventoryFrame", UDim2.fromOffset(190, 20))
-local combatDeckFrame = getOrCreateDeckFrame("CombatDeckFrame", UDim2.fromOffset(190, 360))
+-- Move frames further right to avoid overlap with left-side toggles
+local inventoryFrame = getOrCreateDeckFrame("InventoryFrame", UDim2.fromOffset(260, 20))
+local combatDeckFrame = getOrCreateDeckFrame("CombatDeckFrame", UDim2.fromOffset(260, 360))
 
 local COMBAT_MAX_UNIQUE = 5
 local COMBAT_SLOT_PADDING = 10
@@ -74,96 +102,7 @@ local COMBAT_CARD_HEIGHT = 210
 local COMBAT_SLOT_PREFIX = "CombatSlot"
 
 combatDeckFrame.Size = UDim2.fromOffset(760, 230)
-combatDeckFrame.Position = UDim2.fromOffset(190, 360)
-
-local function ensureDeckTitleLabel(frame, labelName, text, accentColor)
-	local label = mainUI:FindFirstChild(labelName)
-	if not (label and label:IsA("TextLabel")) then
-		if label then
-			label:Destroy()
-		end
-		label = Instance.new("TextLabel")
-		label.Name = labelName
-		label.AnchorPoint = Vector2.new(1, 0)
-		label.Size = UDim2.fromOffset(170, 34)
-		label.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
-		label.BackgroundTransparency = 0.2
-		label.BorderSizePixel = 0
-		label.TextXAlignment = Enum.TextXAlignment.Left
-		label.TextYAlignment = Enum.TextYAlignment.Center
-		label.TextColor3 = Color3.fromRGB(235, 240, 248)
-		label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-		label.TextStrokeTransparency = 0
-		label.Font = Enum.Font.Fantasy
-		label.TextSize = 22
-		label.Text = text
-		label.Parent = mainUI
-
-		local padding = Instance.new("UIPadding")
-		padding.PaddingLeft = UDim.new(0, 12)
-		padding.Parent = label
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
-		corner.Parent = label
-
-		local accent = Instance.new("Frame")
-		accent.Name = "FrameConnector"
-		accent.AnchorPoint = Vector2.new(0, 0.5)
-		accent.Size = UDim2.fromOffset(10, 20)
-		accent.Position = UDim2.fromScale(1, 0.5)
-		accent.BackgroundColor3 = accentColor
-		accent.BackgroundTransparency = 0.08
-		accent.BorderSizePixel = 0
-		accent.ZIndex = label.ZIndex + 1
-		accent.Parent = label
-
-		local accentCorner = Instance.new("UICorner")
-		accentCorner.CornerRadius = UDim.new(0, 4)
-		accentCorner.Parent = accent
-
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 2
-		stroke.Transparency = 0.08
-		stroke.Color = accentColor
-		stroke.Parent = label
-	end
-
-	label.Text = text
-
-	local function syncLabelToFrame()
-		if not (frame and frame.Parent and label and label.Parent) then
-			return
-		end
-		label.Position = UDim2.new(
-			frame.Position.X.Scale,
-			frame.Position.X.Offset - 12,
-			frame.Position.Y.Scale,
-			frame.Position.Y.Offset + 6
-		)
-		label.Visible = frame.Visible
-		label.ZIndex = math.max(1, frame.ZIndex + 3)
-		local stroke = label:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			stroke.Color = accentColor
-		end
-		local accent = label:FindFirstChild("FrameConnector")
-		if accent and accent:IsA("Frame") then
-			accent.BackgroundColor3 = accentColor
-			accent.ZIndex = label.ZIndex + 1
-		end
-	end
-
-	syncLabelToFrame()
-	frame:GetPropertyChangedSignal("Visible"):Connect(syncLabelToFrame)
-	frame:GetPropertyChangedSignal("Position"):Connect(syncLabelToFrame)
-	frame:GetPropertyChangedSignal("ZIndex"):Connect(syncLabelToFrame)
-
-	return label
-end
-
-ensureDeckTitleLabel(inventoryFrame, "InventoryDeckLabel", "Inventory Deck", Color3.fromRGB(80, 150, 255))
-ensureDeckTitleLabel(combatDeckFrame, "CombatDeckLabel", "Combat Deck", Color3.fromRGB(255, 120, 80))
+combatDeckFrame.Position = UDim2.fromOffset(260, 360)
 
 local currentRollCount = 0
 local currentLevel = 1
@@ -213,7 +152,8 @@ local tabController = TabController.Init(mainUI, inventoryFrame, {
 	ItemsTab,
 	BoosterPacksTab,
 })
-tabController.SetActive("Cards")
+-- Remove auto-activation so deck UI doesn't show on join
+-- tabController.SetActive("Cards")
 
 local function getPreviewRarityColor(rarity)
 	return RarityConfig.GetPreviewRarityColor(rarity)
@@ -318,8 +258,10 @@ local function applyAnimatedCardBorder(card, rarity, cardId)
 	card:SetAttribute("HasAnimatedBorder", true)
 
 	local isBeliodus = (cardId == "BeliodusX") or (card and card.Name == "BeliodusX")
+	local isAstraEclipse = (cardId == "AstraEclipse") or (card and card.Name == "AstraEclipse")
 	local isGodRarity = rarity == "God" or rarity == "Transcendent"
-	local borderColor = isBeliodus and Color3.fromRGB(8, 8, 8) or getPreviewRarityColor(rarity)
+	-- Astra Eclipse and Beliodus both use a deep black border color.
+	local borderColor = (isBeliodus or isAstraEclipse) and Color3.fromRGB(8, 8, 8) or getPreviewRarityColor(rarity)
 	local pulseScale = getBorderPulseScale(rarity)
 	if isBeliodus then
 		pulseScale = math.max(pulseScale, 1.7)
@@ -491,14 +433,23 @@ local function setupDeckBackgroundSync(frame, decorName, imageId, tintColor)
 				overlay.Parent = mainUI
 
 				for i = 1, COMBAT_MAX_UNIQUE - 1 do
-					local line = Instance.new("Frame")
-					line.Name = "SlotLine" .. tostring(i)
-					line.AnchorPoint = Vector2.new(0.5, 0)
-					line.Size = UDim2.new(0, 2, 1, -18)
-					line.BackgroundColor3 = Color3.fromRGB(230, 125, 125)
-					line.BackgroundTransparency = 0.45
-					line.BorderSizePixel = 0
-					line.Parent = overlay
+					local slotA = combatDeckFrame:FindFirstChild("CombatSlot" .. tostring(i))
+					local slotB = combatDeckFrame:FindFirstChild("CombatSlot" .. tostring(i+1))
+					if slotA and slotB then
+						local line = Instance.new("Frame")
+						line.Name = "SlotLine" .. tostring(i)
+						line.AnchorPoint = Vector2.new(0.5, 0)
+						line.Size = UDim2.new(0, 2, 1, -18)
+						line.BackgroundColor3 = Color3.fromRGB(230, 125, 125)
+						line.BackgroundTransparency = 0.45
+						line.BorderSizePixel = 0
+						line.Parent = overlay
+						-- Position line between slotA and slotB
+						local xA = slotA.Position.X.Offset + slotA.Size.X.Offset
+						local xB = slotB.Position.X.Offset
+						line.Position = UDim2.fromOffset(math.floor((xA + xB) / 2), 9)
+						line.ZIndex = overlay.ZIndex + 1
+					end
 				end
 			end
 
@@ -539,7 +490,9 @@ combatDeckFrame:GetPropertyChangedSignal("Visible"):Connect(SyncTabsWithDeckTogg
 SyncTabsWithDeckToggle()
 
 local function SetCardStackVisual(card, parentFrame)
-	if not card or not card:FindFirstChild("NumberLabel") then return end
+	if not card or not card:FindFirstChild("NumberLabel") then
+		return
+	end
 	card.NumberLabel.Visible = (parentFrame == inventoryFrame)
 end
 
@@ -827,14 +780,14 @@ local function getCombatCardsInSlot(slot)
 end
 
 local function getCardIdFromGuiCard(guiCard)
-	local id = guiCard and guiCard:GetAttribute("CardId") or nil
-	if type(id) ~= "string" or id == "" then
-		id = guiCard and guiCard.Name or nil
+	local candidateId = guiCard and guiCard:GetAttribute("CardId") or nil
+	if type(candidateId) ~= "string" or candidateId == "" then
+		candidateId = guiCard and guiCard.Name or nil
 	end
-	if type(id) ~= "string" or id == "" then
+	if type(candidateId) ~= "string" or candidateId == "" then
 		return nil
 	end
-	return CardDatabase.ResolveCardIdStrict(id)
+	return CardDatabase.ResolveCardIdStrict(candidateId)
 end
 
 local function choosePrimaryCombatSlotCard(cards)
@@ -951,11 +904,21 @@ local function SaveDeckState()
 end
 
 local function SetProgress(rollCount, level)
-	if type(rollCount) == "number" then
-		currentRollCount = math.max(0, math.floor(rollCount))
-	end
+	-- Set level first so roll cap is correct
 	if type(level) == "number" then
 		currentLevel = math.max(1, math.floor(level))
+	end
+	if type(rollCount) == "number" then
+		currentRollCount = math.max(0, math.floor(rollCount))
+		while true do
+			local rollsNeeded = getCumulativeRollsToLevel(currentLevel)
+			if currentRollCount >= rollsNeeded then
+				currentRollCount = currentRollCount - rollsNeeded
+				currentLevel = currentLevel + 1
+			else
+				break
+			end
+		end
 	end
 	if updateProgressStatsDisplay then
 		updateProgressStatsDisplay()
@@ -1059,6 +1022,12 @@ local function applySellSelectionVisual(card, selectedCount)
 		glow.Transparency = 1
 		glow.Parent = card
 	end
+	-- Set high ZIndex for glow if possible
+	pcall(function()
+		if card:IsA("GuiObject") then
+			card.ZIndex = math.max(card.ZIndex, 50)
+		end
+	end)
 
 	local badge = card:FindFirstChild("SellSelectBadge")
 	if not (badge and badge:IsA("TextLabel")) then
@@ -1074,12 +1043,14 @@ local function applySellSelectionVisual(card, selectedCount)
 		badge.TextColor3 = Color3.fromRGB(229, 255, 214)
 		badge.TextScaled = true
 		badge.Visible = false
-		badge.ZIndex = 8
+		badge.ZIndex = 100
 		badge.Parent = card
 
 		local badgeCorner = Instance.new("UICorner")
 		badgeCorner.CornerRadius = UDim.new(0, 4)
 		badgeCorner.Parent = badge
+	else
+		badge.ZIndex = 100
 	end
 
 	if selectedCount > 0 then
@@ -1287,15 +1258,19 @@ local function ensureBottomStatsBar()
 end
 
 local currencyValue = getCurrencyValueObject()
+
 updateProgressStatsDisplay = function()
 	local statsBar = ensureBottomStatsBar()
 	if not statsBar then
 		return
 	end
 
+
 	local rollsPill = statsBar:FindFirstChild("RollsPill")
 	if rollsPill and rollsPill:FindFirstChild("Value") then
-		rollsPill.Value.Text = tostring(currentRollCount)
+		local rollsNeeded = getCumulativeRollsToLevel(currentLevel)
+		local rollsText = string.format("%d / %d", currentRollCount, rollsNeeded)
+		rollsPill.Value.Text = rollsText
 	end
 
 	local levelPill = statsBar:FindFirstChild("LevelPill")
@@ -1316,23 +1291,29 @@ currencyValue:GetPropertyChangedSignal("Value"):Connect(function()
 end)
 
 local economySnapshotEvent = ReplicatedStorage:FindFirstChild("EconomySnapshotEvent")
-if not (economySnapshotEvent and economySnapshotEvent:IsA("BindableEvent")) then
-	if economySnapshotEvent then
-		economySnapshotEvent:Destroy()
-	end
-	economySnapshotEvent = Instance.new("BindableEvent")
-	economySnapshotEvent.Name = "EconomySnapshotEvent"
-	economySnapshotEvent.Parent = ReplicatedStorage
-end
-
-economySnapshotEvent.Event:Connect(function(payload)
+local function handleEconomySnapshot(payload)
 	if type(payload) ~= "table" then
 		return
 	end
 	if type(payload.boosterPacks) == "table" then
 		BoosterPackSystem.LoadOwnedSnapshot(payload.boosterPacks)
 	end
-end)
+end
+
+if economySnapshotEvent and economySnapshotEvent:IsA("RemoteEvent") then
+	economySnapshotEvent.OnClientEvent:Connect(handleEconomySnapshot)
+else
+	if economySnapshotEvent and not economySnapshotEvent:IsA("BindableEvent") then
+		economySnapshotEvent:Destroy()
+		economySnapshotEvent = nil
+	end
+	if not economySnapshotEvent then
+		economySnapshotEvent = Instance.new("BindableEvent")
+		economySnapshotEvent.Name = "EconomySnapshotEvent"
+		economySnapshotEvent.Parent = ReplicatedStorage
+	end
+	economySnapshotEvent.Event:Connect(handleEconomySnapshot)
+end
 
 updateProgressStatsDisplay()
 
@@ -1513,7 +1494,9 @@ function CreateCard(cardId)
 	end
 
 	local data = CardDatabase.GetCardData(resolvedCardId)
-	if not data then return nil end
+	if not data then
+		return nil
+	end
 
 	local newCard = template:Clone()
 	newCard.Name = resolvedCardId
@@ -1626,6 +1609,7 @@ function CreateCard(cardId)
 		local current = selectedSellCountByCard[newCard] or 0
 		local nextCount = math.min(stackCount, current + 1)
 		selectedSellCountByCard[newCard] = nextCount
+		applySellSelectionVisual(newCard, nextCount)
 		refreshSellSelectionTotals()
 	end
 
@@ -1805,12 +1789,14 @@ function AddCardToInventory(cardId, shouldSave)
 		local num = tonumber(existingCard.NumberLabel.Text) or 1
 		existingCard.NumberLabel.Text = tostring(num + 1)
 		SetCardStackVisual(existingCard, inventoryFrame)
+			-- (Removed blood VFX for TestBattleCard)
 	else
 		local card = CreateCard(resolvedCardId)
 		if card then
 			card.NumberLabel.Text = "1"
 			card.Parent = inventoryFrame
 			SetCardStackVisual(card, inventoryFrame)
+				-- (Removed blood VFX for TestBattleCard)
 		end
 	end
 
@@ -1921,6 +1907,7 @@ end
 
 -- Handle incoming data
 saveEvent.OnClientEvent:Connect(function(data)
+	print("[DEBUG] saveEvent.OnClientEvent fired. Data:", data)
 	SetProgress(data and data.rollCount, data and data.level)
 	if data and type(data.coins) == "number" then
 		getCurrencyValueObject().Value = math.max(0, math.floor(data.coins))
@@ -1933,20 +1920,36 @@ saveEvent.OnClientEvent:Connect(function(data)
 		getAutoRollOwnedValueObject().Value = 0
 	end
 	clearSellSelections()
-	
+
+	-- Robust UI restoration
+	inventoryFrame.Visible = false
+	combatDeckFrame.Visible = false
+	inventoryFrame.Parent = mainUI
+	combatDeckFrame.Parent = mainUI
+	print("[DEBUG] inventoryFrame.Visible:", inventoryFrame.Visible, "Parent:", inventoryFrame.Parent)
+	print("[DEBUG] combatDeckFrame.Visible:", combatDeckFrame.Visible, "Parent:", combatDeckFrame.Parent)
+	local statsBar = mainUI:FindFirstChild("BottomStatsBar")
+	if statsBar then
+		statsBar.Visible = true
+		statsBar.Parent = mainUI
+		print("[DEBUG] statsBar.Visible:", statsBar.Visible, "Parent:", statsBar.Parent)
+	else
+		print("[DEBUG] BottomStatsBar missing!")
+	end
+
 	-- Clear frames
 	inventoryFrame:ClearAllChildren()
 	combatDeckFrame:ClearAllChildren()
-	
+
 	-- Setup layouts
 	SetupGridLayouts()
-	
+
 	-- Group inventory by card ID and count
 	local inventoryCounts = {}
 	for _, cardId in ipairs(data.inventory or {}) do
 		inventoryCounts[cardId] = (inventoryCounts[cardId] or 0) + 1
 	end
-	
+
 	-- Create stacked cards for inventory
 	for cardId, count in pairs(inventoryCounts) do
 		local card = CreateCard(cardId)
@@ -1954,9 +1957,12 @@ saveEvent.OnClientEvent:Connect(function(data)
 			card.NumberLabel.Text = tostring(count)
 			card.Parent = inventoryFrame
 			SetCardStackVisual(card, inventoryFrame)
+			print("[DEBUG] Added card to inventory:", cardId, "count:", count, "Visible:", card.Visible, "Parent:", card.Parent)
+		else
+			print("[DEBUG] Failed to create card:", cardId)
 		end
 	end
-	
+
 	-- Rebuild combat deck exactly by slot order (duplicates allowed).
 	for slotIndex = 1, COMBAT_MAX_UNIQUE do
 		local cardId = data and data.combat and data.combat[slotIndex]
@@ -1974,6 +1980,9 @@ saveEvent.OnClientEvent:Connect(function(data)
 				card.Size = UDim2.fromScale(1, 1)
 				card.Position = UDim2.fromOffset(0, 0)
 				SetCardStackVisual(card, combatDeckFrame)
+				print("[DEBUG] Added card to combat slot:", slotIndex, cardId, "Visible:", card.Visible, "Parent:", card.Parent)
+			else
+				print("[DEBUG] Failed to create combat card or slot:", slotIndex, cardId)
 			end
 		end
 	end
@@ -1987,7 +1996,7 @@ saveEvent.OnClientEvent:Connect(function(data)
 			SaveDeckState()
 		end)
 	end
-	
+
 	-- Force layout update
 	task.defer(function()
 		for _, frame in pairs({inventoryFrame}) do
@@ -1999,6 +2008,17 @@ saveEvent.OnClientEvent:Connect(function(data)
 			end
 		end
 	end)
+
+	-- Extra: ensure all UI elements are visible and parented
+	       -- Only restore BottomStatsBar, not InventoryDeckLabel
+		       local restoredStatsBar = mainUI:FindFirstChild("BottomStatsBar")
+		       if restoredStatsBar then
+			       restoredStatsBar.Visible = true
+			       restoredStatsBar.Parent = mainUI
+			       print("[DEBUG] UI restored: BottomStatsBar Visible:", restoredStatsBar.Visible, "Parent:", restoredStatsBar.Parent)
+		       else
+			       print("[DEBUG] UI missing: BottomStatsBar")
+		       end
 end)
 
 -- Request initial data

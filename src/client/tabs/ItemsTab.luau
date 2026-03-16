@@ -1,7 +1,6 @@
 local ItemsTab = {}
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local EconomyProtocol = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("EconomyProtocol"))
-local EconomyClient = require(script.Parent.Parent:WaitForChild("services"):WaitForChild("EconomyClient"))
+local ShopClient = require(script.Parent.Parent:WaitForChild("services"):WaitForChild("ShopClient"))
 
 local TAB_IMAGE = "rbxassetid://0"
 local AUTO_ROLL_ITEM_ID = "AutoRoll2x20s"
@@ -35,7 +34,8 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	itemsFrame.ScrollBarThickness = 8
 	itemsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	itemsFrame.Visible = false
-	itemsFrame.Parent = mainUI
+	itemsFrame.Parent = (inventoryFrame and inventoryFrame.Parent) or mainUI
+	itemsFrame.ZIndex = 10
 
 	local buffEvent = ReplicatedStorage:FindFirstChild("AutoRollBuffEvent")
 	if not buffEvent then
@@ -58,7 +58,7 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Name = "TitleLabel"
 	titleLabel.Size = UDim2.new(1, -20, 0, 36)
-	titleLabel.Position = UDim2.new(0, 10, 0, 8)
+	titleLabel.Position = UDim2.fromOffset(10, 8)
 	titleLabel.BackgroundTransparency = 1
 	titleLabel.Text = "Owned Items"
 	titleLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -70,7 +70,7 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	local row = Instance.new("Frame")
 	row.Name = "AutoRollBoostRow"
 	row.Size = UDim2.new(1, -20, 0, 74)
-	row.Position = UDim2.new(0, 10, 0, 52)
+	row.Position = UDim2.fromOffset(10, 52)
 	row.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
 	row.BorderSizePixel = 0
 	row.Parent = itemsFrame
@@ -81,8 +81,8 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 
 	local icon = Instance.new("ImageLabel")
 	icon.Name = "ItemIcon"
-	icon.Size = UDim2.new(0, 56, 0, 56)
-	icon.Position = UDim2.new(0, 8, 0, 9)
+	icon.Size = UDim2.fromOffset(56, 56)
+	icon.Position = UDim2.fromOffset(8, 9)
 	icon.BackgroundColor3 = Color3.fromRGB(52, 52, 60)
 	icon.BorderSizePixel = 0
 	icon.Image = "rbxassetid://72066453841625"
@@ -95,7 +95,7 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "ItemName"
 	nameLabel.Size = UDim2.new(1, -220, 0, 28)
-	nameLabel.Position = UDim2.new(0, 72, 0, 8)
+	nameLabel.Position = UDim2.fromOffset(72, 8)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = "2x Auto Roll Boost"
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -107,7 +107,7 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	local descLabel = Instance.new("TextLabel")
 	descLabel.Name = "ItemDesc"
 	descLabel.Size = UDim2.new(1, -300, 0, 24)
-	descLabel.Position = UDim2.new(0, 72, 0, 38)
+	descLabel.Position = UDim2.fromOffset(72, 38)
 	descLabel.BackgroundTransparency = 1
 	descLabel.Text = "Doubles auto-roll speed for 20 seconds"
 	descLabel.TextColor3 = Color3.fromRGB(210, 210, 210)
@@ -118,7 +118,7 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 
 	local ownedLabel = Instance.new("TextLabel")
 	ownedLabel.Name = "OwnedLabel"
-	ownedLabel.Size = UDim2.new(0, 92, 0, 24)
+	ownedLabel.Size = UDim2.fromOffset(92, 24)
 	ownedLabel.Position = UDim2.new(1, -236, 0.5, -12)
 	ownedLabel.BackgroundTransparency = 1
 	ownedLabel.Text = "Owned: 0"
@@ -128,9 +128,10 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 	ownedLabel.TextSize = 17
 	ownedLabel.Parent = row
 
+
 	local useButton = Instance.new("TextButton")
 	useButton.Name = "UseButton"
-	useButton.Size = UDim2.new(0, 132, 0, 40)
+	useButton.Size = UDim2.fromOffset(132, 40)
 	useButton.Position = UDim2.new(1, -142, 0.5, -20)
 	useButton.BackgroundColor3 = Color3.fromRGB(70, 70, 74)
 	useButton.BorderSizePixel = 0
@@ -159,20 +160,11 @@ function ItemsTab.GetOrCreateFrame(mainUI, inventoryFrame)
 			return
 		end
 
-		local ok, responseOrErr = EconomyClient.Request(EconomyProtocol.ActionType.UseItem, {
-			itemId = AUTO_ROLL_ITEM_ID,
-			amount = 1,
-		})
-		if not ok then
-			useButton.Text = "Failed"
-			warn("Failed to use item: " .. tostring(responseOrErr))
-		else
-			if type(responseOrErr.effect) == "table" then
-				buffEvent:Fire(responseOrErr.effect)
-			end
-			useButton.Text = "Used!"
+		local ok, responseOrErr = ShopClient.UseItem(AUTO_ROLL_ITEM_ID, 1)
+		useButton.Text = ok and "Used!" or "Failed"
+		if ok and type(responseOrErr.effect) == "table" then
+			buffEvent:Fire(responseOrErr.effect)
 		end
-
 		task.delay(0.4, function()
 			if useButton and useButton.Parent then
 				useButton.Text = "Use"

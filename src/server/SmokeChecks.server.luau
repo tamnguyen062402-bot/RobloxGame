@@ -7,6 +7,11 @@ local IdleRollProtocol = require(ReplicatedStorage:WaitForChild("Shared"):WaitFo
 
 local function warnCheck(msg)
 	warn("[SmokeChecks] " .. msg)
+
+	-- selene: allow(unused_variable)
+	-- Ensure AllocatePointsRemote handler is connected
+	local allocatePointsRemoteModule = require(script.Parent:FindFirstChild("AllocatePointsRemote"))
+	print("[SmokeChecks] Required AllocatePointsRemote, handler should be connected.")
 end
 
 local function checkBoosterConfig()

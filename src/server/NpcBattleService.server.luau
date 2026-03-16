@@ -15,16 +15,29 @@ local DEFAULT_ABILITY_FIRST_CAST_DELAY_SECONDS = math.max(0, tonumber(BattleBala
 local MIN_ABILITY_COOLDOWN_SECONDS = math.max(1, tonumber(BattleBalanceConfig.Defaults.AbilityMinCooldownSeconds) or 1)
 
 local NPC_REGISTRY = {
-	Baloney = {
-		NpcId = "baloney_dummy",
-		DisplayName = "Baloney",
-		WorkspaceName = "Baloney",
+	PerfectCell = {
+		NpcId = "PerfectCell",
+		DisplayName = "Perfect Cell",
+		WorkspaceName = "PerfectCell",
 		InteractionRange = 24,
 		PromptText = "Battle",
-		ObjectText = "Baloney",
+		ObjectText = "Perfect Cell",
 		HoldDuration = 0.12,
-		BossCardId = "BaloneyBossCard",
-		BossCardName = "Baloney, The Test Tyrant",
+		BossCardId = "PerfectCell",
+		BossCardName = "Perfect Cell",
+		BossMaxHealth = 1000000000,
+		BossAttack = 4000000,
+	},
+	Aokoji = {
+		NpcId = "Aokoji",
+		DisplayName = "Aokoji",
+		WorkspaceName = "Aokoji",
+		InteractionRange = 24,
+		PromptText = "Battle",
+		ObjectText = "Aokoji",
+		HoldDuration = 0.12,
+		BossCardId = "Aokoji",
+		BossCardName = "Aokoji",
 		BossMaxHealth = 1000000000,
 		BossAttack = 4000000,
 	},
@@ -188,7 +201,7 @@ local function cleanupStalePrompts()
 	for _, descendant in ipairs(Workspace:GetDescendants()) do
 		if descendant:IsA("ProximityPrompt") then
 			local promptLooksNpcBattle = descendant.Name == "NpcBattlePrompt"
-				or descendant.ObjectText == "Baloney"
+				or descendant.ObjectText == "Perfect Cell"
 				or descendant.ActionText == "Battle"
 				or descendant.ActionText == "Challenge"
 
@@ -517,7 +530,13 @@ local function runBossAttackLoop(player, session)
 					local dealtDamage = session.bossAttack
 					target.health = math.max(0, target.health - dealtDamage)
 					pruneDeadAttackers(session)
-					session.nextBossAttackAt = now + BOSS_COUNTER_ATTACK_INTERVAL_SECONDS
+					-- Patch: Use AttackIntervalSeconds from CardDatabase for Aokoji
+					local interval = BOSS_COUNTER_ATTACK_INTERVAL_SECONDS
+					if session.bossCardId == "Aokoji" then
+						local cardData = CardDatabase.GetCardData("Aokoji")
+						interval = math.max(0.5, tonumber(cardData and cardData.AttackIntervalSeconds) or BOSS_COUNTER_ATTACK_INTERVAL_SECONDS)
+					end
+					session.nextBossAttackAt = now + interval
 					dealtAny = true
 
 					sendBossState(player, session, {
@@ -694,7 +713,7 @@ end
 
 bindAllPrompts()
 Workspace.DescendantAdded:Connect(function(descendant)
-	if descendant.Name == "Baloney" then
+	if descendant.Name == "PerfectCell" then
 		task.defer(bindAllPrompts)
 	end
 end)

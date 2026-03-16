@@ -7,7 +7,7 @@ RarityConfig.PreviewColors = {
 	Epic = Color3.fromRGB(210, 95, 255),
 	Legendary = Color3.fromRGB(255, 185, 55),
 	God = Color3.fromRGB(255, 70, 70),
-	Transcendent = Color3.fromRGB(120, 245, 255),
+	Transcendent = Color3.fromRGB(0, 0, 0),
 }
 
 RarityConfig.BorderPulseScale = {
@@ -28,7 +28,15 @@ function RarityConfig.GetBorderPulseScale(rarity)
 	return RarityConfig.BorderPulseScale[rarity] or RarityConfig.BorderPulseScale.Common
 end
 
-function RarityConfig.BuildBorderGradient(baseColor)
+function RarityConfig.BuildBorderGradient(baseColor, rarity)
+	if rarity == "God" then
+		-- Gold gradient for God rarity
+		return ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 130, 40)),
+			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(255, 215, 60)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 130, 40)),
+		})
+	end
 	local bright = baseColor:Lerp(Color3.new(1, 1, 1), 0.35)
 	local dark = baseColor:Lerp(Color3.new(0, 0, 0), 0.25)
 	return ColorSequence.new({
